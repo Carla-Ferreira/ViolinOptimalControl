@@ -27,13 +27,18 @@ if __name__ == "__main__":
 
     # np.save("bow_target_param", generate_up_and_down_bow_target(200))
     bow_target_param = np.load("bow_target_param.npy")
-    frame_to_init_from = nb_shooting_pts_window+1
+    frame_to_init_from = 75
     nb_shooting_pts_all_optim = 300
 
     X_est = np.zeros((n_qdot + n_q , nb_shooting_pts_all_optim))
     U_est = np.zeros((n_tau, nb_shooting_pts_all_optim))
     Q_est = np.zeros((n_q , nb_shooting_pts_all_optim))
     Qdot_est = np.zeros((n_qdot , nb_shooting_pts_all_optim))
+
+    lam_g_all_iter = np.zeros(((((n_qdot + n_q) + 3) * nb_shooting_pts_window), nb_shooting_pts_all_optim))
+    lam_x_all_iter = np.zeros(((n_qdot+n_q)*(nb_shooting_pts_window+1)+(n_tau*nb_shooting_pts_window), nb_shooting_pts_all_optim))
+    sol_lam_g_all_iter = np.zeros(((((n_qdot + n_q) + 3) * nb_shooting_pts_window), nb_shooting_pts_all_optim))
+    sol_lam_x_all_iter = np.zeros(((n_qdot+n_q)*(nb_shooting_pts_window+1)+(n_tau*nb_shooting_pts_window), nb_shooting_pts_all_optim))
 
     begin_at_first_iter = True
     if begin_at_first_iter == True :
@@ -77,6 +82,7 @@ if __name__ == "__main__":
     shift = 1
 
 
+
     # Init from known position
     # ocp_load, sol_load = OptimalControlProgram.load(f"saved_iterations/{frame_to_init_from-1}_iter.bo")
     # data_sol_prev = Data.get_data(ocp_load, sol_load, concatenate=False)
@@ -87,38 +93,38 @@ if __name__ == "__main__":
 
 
 
-    for i in range(0, 30):
+    for i in range(0, 160):
         print(f"iteration:{i}")
         q_target[bow.hair_idx, :] = target[i * shift: nb_shooting_pts_window + (i * shift) + 1]
-        define_new_objectives(weight=1000, ocp=ocp, q_target=q_target, bow=bow)
+        # q_target[bow.hair_idx, :] = target[0 * shift: nb_shooting_pts_window + (0 * shift) + 1]
+        define_new_objectives(weight=10000, ocp=ocp, q_target=q_target, bow=bow)
         sol = ocp.solve(
             show_online_optim=False,
             solver_options={"max_iter": 1000, "hessian_approximation": "exact", "bound_push": 10 ** (-10),
                             "bound_frac": 10 ** (-10), "warm_start_init_point":"yes",
                             "warm_start_bound_push" : 10 ** (-16), "warm_start_bound_frac" : 10 ** (-16),
                             "nlp_scaling_method": "none", "warm_start_mult_bound_push": 10 ** (-16),
-                            # "warm_start_slack_bound_push": 10 ** (-16)," warm_start_slack_bound_frac":10 ** (-16),
+                            "warm_start_slack_bound_push": 10 ** (-16) # ," warm_start_slack_bound_frac":10 ** (-16),
                             }
         )
-        # sol = Simulate.from_controls_and_initial_states(ocp, x_init.initial_guess, u_init.initial_guess)
-        x_init, u_init, X_out, U_out, x_bounds, u, lam_g, lam_x= warm_start_nmpc(sol=sol, ocp=ocp,
+        if i!=0:
+            lam_g_all_iter[:, i] = lam_g[:, 0]
+            lam_x_all_iter[:, i] = lam_x[:, 0]
+        x_init, u_init, X_out, U_out, x_bounds, u, lam_g, lam_x = warm_start_nmpc(sol=sol, ocp=ocp,
                                                                     nb_shooting_pts_window=nb_shooting_pts_window,
                                                                     n_q = n_q, n_qdot=n_qdot, n_tau=n_tau,
                                                                     biorbd_model=biorbd_model,
-                                                                    acados=False, shift=shift) #, lam_g, lam_x
-        # x_init, u_init, X_out, U_out, x_bounds, u= warm_start_nmpc_same_iter(sol=sol, ocp=ocp, biorbd_model=biorbd_model)
-        # warm_start_nmpc(sol, ocp, nb_shooting_pts_window, n_q, n_qdot, n_tau, biorbd_model, acados, shift=1)
-        # A = lam_g
-        # sol['lam_g'] = lam_g
-        # # B = lam_x
-        # sol['lam_x'] = lam_x
-        for a in range(sol['lam_g'].shape[0]):
-            sol['lam_g'][a] = lam_g[a]
-        for a in range(sol['lam_x'].shape[0]):
-            sol['lam_x'][a] = lam_x[a]
+                                                                    acados=False, shift=shift)
+        sol_lam_g_all_iter[:, i:i+1] = sol['lam_g']
+        sol_lam_x_all_iter[:, i:i+1] = sol['lam_x']
 
-        # lam_g est un array et sol['lam_g'] est un DM, envoyer l'un dans l'autre est-t-il compatible ?
-        # Ne semble pas être la bonne solution initiale... Le shift est-il exact ? Pour passer d'une solution à la suivante ?
+
+
+        for d in range(sol['lam_g'].shape[0]):
+            sol['lam_g'][d] = lam_g[d]
+        for e in range(sol['lam_x'].shape[0]):
+            sol['lam_x'][e] = lam_x[e]
+
         Q_est[:, i] = X_out[:10]
         X_est[:, i] = X_out
         Qdot_est[:, i] = X_out[10:]
@@ -126,29 +132,61 @@ if __name__ == "__main__":
 
         ocp.save(sol, f"saved_iterations/{i}_iter_acados")  # you don't have to specify the extension ".bo"
 
-    np.save("Q_est_", Q_est)
-    np.save("X_est_", X_est)
-    np.save("Qdot_est_", Qdot_est)
+    np.save("Q_est", Q_est)
+    np.save("X_est", X_est)
+    np.save("Qdot_est", Qdot_est)
+    np.save("U_est", U_est)
+    np.save("sol_lam_g_all_iter", sol_lam_g_all_iter)
+    np.save("sol_lam_x_all_iter", sol_lam_x_all_iter)
+    np.save("lam_g_all_iter", lam_g_all_iter)
+    np.save("lam_x_all_iter", lam_x_all_iter)
     np.save("U_est_", U_est)
-    np.save("U_est_", U_est)
 
 
+# To get some graphs for the lagrangian multiplier
+# MOY_lam_g = np.ndarray((((n_qdot + n_q) + 3) * nb_shooting_pts_window))
+# MOY_lam_x = np.ndarray((n_qdot + n_q) * (nb_shooting_pts_window + 1) + (n_tau * nb_shooting_pts_window))
+# lam_g_all_iter = np.load("lam_g_all_iter.npy")
+# lam_x_all_iter = np.load("lam_x_all_iter.npy")
+# sol_lam_g_all_iter = np.load("sol_lam_g_all_iter.npy")
+# sol_lam_x_all_iter = np.load("sol_lam_x_all_iter.npy")
+# for b in range(160):
+#     for a in range((((n_qdot + n_q) + 3) * nb_shooting_pts_window)):
+#         MOY_lam_g[a] = lam_g_all_iter[:, b][a] / sol_lam_g_all_iter[:, b][a]
+#     for c in range((n_qdot + n_q) * (nb_shooting_pts_window + 1) + (n_tau * nb_shooting_pts_window)):
+#         MOY_lam_x[c] = lam_x_all_iter[:, b][c] / sol_lam_x_all_iter[:, b][c]
+#
+#
+# matplotlib.pyplot.suptitle('sol lam g')
+# matplotlib.pyplot.plot(sol_lam_g_all_iter[1, 0:150], color="red")
+# matplotlib.pyplot.title(f"lam_g")
+# matplotlib.pyplot.plot(lam_g_all_iter[1, 0:150], color="blue")
+# matplotlib.pyplot.show()
+#
+#
+# for t in range(10):
+#     matplotlib.pyplot.subplot(2, 5, int(t + 1))
+#     matplotlib.pyplot.plot(sol_lam_x_all_iter[t+20, 0:150], color="red")
+#     matplotlib.pyplot.title(f"lam_x")
+#     matplotlib.pyplot.plot(lam_x_all_iter[t+20, 0:150], color="blue")
+#     matplotlib.pyplot.show()
+#
+#
+# for t in range(10):
+#     matplotlib.pyplot.suptitle(f"Comparaison de la valeur d'entrée de lam_g et la sortie sol['lam_g'] sur 150 noeuds")
+#     matplotlib.pyplot.subplot(2, 5, int(t + 1))
+#     matplotlib.pyplot.plot(sol_lam_g_all_iter[t+10, 0:150], color="red")
+#     matplotlib.pyplot.title(f"Colonne n{10+t}")
+#     matplotlib.pyplot.plot(lam_g_all_iter[t+10, 0:150], color="blue")
+#     matplotlib.pyplot.show()
+#
+#
+# for t in range(10):
+#     matplotlib.pyplot.suptitle(f"Comparaison de la valeur d'entrée de lam_x et la sortie sol['lam_x'] sur 150 noeuds")
+#     matplotlib.pyplot.subplot(2, 5, int(t + 1))
+#     matplotlib.pyplot.plot(sol_lam_x_all_iter[t+10, 0:150], color="red")
+#     matplotlib.pyplot.title(f"Colonne n{10+t}")
+#     matplotlib.pyplot.plot(lam_x_all_iter[t+10, 0:150], color="blue")
+#     matplotlib.pyplot.show()
 
 
-
-
-# Besides setting an option, you need to pass the 'x0', 'lam_g0', 'lam_x0' inputs to have an effect.
-# Other relevant options to do warm-starting with ipopt: mu_init, warm_start_mult_bound_push, warm_start_slack_bound_push, warm_start_bound_push. Usually, you want to set these low.
-
-## Pour afficher mouvement global
-
-# ocp, x_bounds = prepare_generic_ocp(
-#     biorbd_model_path=biorbd_model_path,
-#     number_shooting_points=nb_shooting_pts_all_optim,
-#     final_time=2,
-#     x_init=X_est,
-#     u_init=U_est,
-#     x0=x0,
-#     )
-# sol = Simulate.from_controls_and_initial_states(ocp, x_init.initial_guess, u_init.initial_guess)
-# ShowResult(ocp, sol).graphs()

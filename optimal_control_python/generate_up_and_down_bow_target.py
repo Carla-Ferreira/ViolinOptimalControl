@@ -31,7 +31,6 @@ def curve_integral(x, t):
     integ[0] = 0
     for i in range(t.shape[0]-1):
         integ[i+1] = integrate.quad(lambda t: curve(x, t), 0, t[i+1])[0]
-        # integ[i] = integrate.quad(lambda t: curve(x, t), 0, t[i])[0]
     return integ + min_bow
 
 def generate_up_and_down_bow_target(n_points, bow_speed=10, bow_acceleration=0.5):
@@ -42,10 +41,9 @@ def generate_up_and_down_bow_target(n_points, bow_speed=10, bow_acceleration=0.5
         integ = curve_integral(x,t)
         moy = (integ[int(n_points/2)-2] + integ[int(n_points/2)+2])/2
         return np.array((bow_acceleration - x[0], bow_speed - x[1], y[-1], y[0], (moy - max_bow ) * 1000))
-        # return np.array((bow_acceleration-x[0], bow_speed-x[1], y[-1], y[0], (moy-(max_bow - min_bow))*1000))
 
     t = np.linspace(0, 2, n_points)
-    x_opt = optimize.least_squares(lambda x: objective_function(x, t), x0=np.array((1, 8))) # x[0] = amplitude et x[1]= 2 pi/ period
+    x_opt = optimize.least_squares(lambda x: objective_function(x, t), x0=np.array((1, 8)))
     return x_opt.x
 
 

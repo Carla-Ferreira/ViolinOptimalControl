@@ -34,30 +34,30 @@ def prepare_generic_ocp(biorbd_model_path, number_shooting_points, final_time, x
         weight2=1
 
     else:
-        weight1 = 100
+        weight1 = 1000
         weight2 = 1
     constraints = ConstraintList()
-    for j in range(1, number_shooting_points + 1):
+    # for j in range(1, number_shooting_points + 1):
+    #     constraints.add(Constraint.ALIGN_MARKERS,
+    #                         node=j,
+    #                         min_bound=0,
+    #                         max_bound=0,
+    #                         first_marker_idx=Bow.contact_marker,
+    #                         second_marker_idx=violin.bridge_marker, list_index=j)
+    for j in range(1, 5):
         constraints.add(Constraint.ALIGN_MARKERS,
-                            node=j,
-                            min_bound=0,
-                            max_bound=0,
-                            first_marker_idx=Bow.contact_marker,
-                            second_marker_idx=violin.bridge_marker, list_index=j)
-    # for j in range(1, 5):
-    #     constraints.add(Constraint.ALIGN_MARKERS,
-    #                     node=j,
-    #                     min_bound=0,
-    #                     max_bound=0,
-    #                     first_marker_idx=Bow.contact_marker,
-    #                     second_marker_idx=violin.bridge_marker, list_index=j)
-    # for j in range(5, number_shooting_points + 1):
-    #     constraints.add(Constraint.ALIGN_MARKERS,
-    #                     node=j,
-    #                     min_bound=-10**(j-14), #-10**(j-14) donne 25 itérations
-    #                     max_bound=10**(j-14), # (j-4)/10 donne 21 itérations
-    #                     first_marker_idx=Bow.contact_marker,
-    #                     second_marker_idx=violin.bridge_marker, list_index=j)
+                        node=j,
+                        min_bound=0,
+                        max_bound=0,
+                        first_marker_idx=Bow.contact_marker,
+                        second_marker_idx=violin.bridge_marker, list_index=j)
+    for j in range(5, number_shooting_points + 1):
+        constraints.add(Constraint.ALIGN_MARKERS,
+                        node=j,
+                        min_bound=-10**(j-14), #-10**(j-14) donne 25 itérations
+                        max_bound=10**(j-14), # (j-4)/10 donne 21 itérations
+                        first_marker_idx=Bow.contact_marker,
+                        second_marker_idx=violin.bridge_marker, list_index=j)
 
     objective_functions = ObjectiveList()
     objective_functions.add(Objective.Lagrange.MINIMIZE_TORQUE, list_index=0)
@@ -151,8 +151,8 @@ def warm_start_nmpc_same_iter(sol, ocp, biorbd_model):
     x = np.vstack([q, dq])
     X_out = x[:, 0]
     U_out = u[:, 0]
-    lam_g = sol['lam_g']
-    lam_x = sol['lam_x']
+    # lam_g = sol['lam_g']
+    # lam_x = sol['lam_x']
     x_init = np.vstack([q, dq])
     x_init[:, :] = x[:, :]
     # x_init[:, -shift:] = np.tile(np.array(x[:, -1])[:, np.newaxis], shift) # constant
@@ -165,7 +165,7 @@ def warm_start_nmpc_same_iter(sol, ocp, biorbd_model):
     ocp.update_initial_guess(x_init, u_init)
     ocp.update_bounds(x_bounds=x_bounds)
 
-    return x_init, u_init, X_out, U_out, x_bounds, u, lam_g, lam_x
+    return x_init, u_init, X_out, U_out, x_bounds, u # , lam_g, lam_x
 
 def define_new_objectives(weight, ocp, q_target, bow):
     new_objectives = ObjectiveList()
